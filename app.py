@@ -1,39 +1,33 @@
 from flask import Flask, render_template, request
 import openai
+import os
 
 app = Flask(__name__)
-openai.api_key = "OPENAI_API_KEY"  # Buraya kendi API anahtarınızı yazın
 
-@app.route('/')
-def form():
-    return render_template('index.html')
+openai_api_key = os.getenv("OPENAI_API_KEY") or "senin_api_anahtarın"
+client = openai.OpenAI(api_key=openai_api_key)
 
-@app.route('/analiz', methods=['POST'])
-def analiz():
-    firma = request.form['firma']
-    ekipman = request.form['ekipman']
-    kwh = request.form['kwh']
-    saat = request.form['saat']
+@app.route("/", methods=["GET", "POST"])
+def index():
+    yorum = ""
+    if request.method == "POST":
+        ekipman = request.form["ekipman"]
+        tuketim = request.form["tuketim"]
+        mesaj = f"{ekipman} ekipmanının ölçülen enerji tüketimi: {tuketim} kWh. Bu değeri değerlendir ve enerji verimliliği açısından önerilerde bulun."
 
-    prompt = f"""
-    Bir enerji verimliliği uzmanı olarak aşağıdaki ekipmanı değerlendir:
+        try:
+            completion = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "Sen bir enerji verimliliği uzmanısın. Verileri analiz et ve net öneriler sun."},
+                    {"role": "user", "content": mesaj}
+                ]
+            )
+            yorum = completion.choices[0].message.content.strip()
+        except Exception as e:
+            yorum = f"Hata oluştu: {str(e)}"
 
-    Firma: {firma}
-    Ekipman Türü: {ekipman}
-    Enerji Tüketimi: {kwh} kWh/gün
-    Çalışma Süresi: {saat} saat/gün
+    return render_template("index.html", yorum=yorum)
 
-    Bu bilgilerle enerji verimliliği açısından kısa bir analiz ve öneri ver.
-    """
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5
-    )
-
-    yorum = response["choices"][0]["message"]["content"]
-    return f"<h2>Yapay Zeka Yorumu:</h2><p>{yorum}</p><br><a href='/'>Geri Dön</a>"
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
